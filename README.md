@@ -1,6 +1,8 @@
 # Winning strategy for Steve Ballmer's puzzle
 
-TODO - link to the blog article.
+This repository accompanies the article on my blog: **["Steve Ballmer was wrong"](https://gukov.dev/puzzles/math/2024/09/05/steve-ballmer-was-wrong.html)**.
+
+It contains the code for calculating the winning strategy for the Steve Ballmer's [favorite interview question](https://youtu.be/svCYbkS0Sjk?t=35).
 
 ## Expected wins
 
