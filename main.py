@@ -3,11 +3,18 @@ from math import log2
 from scipy.optimize import linprog
 
 
-def choose_straight_middle(left_incl, right_incl):
+def choose_straight_middle_left(left_incl, right_incl):
     """
-    Select the middle element in the interval. In case of a tie, choose the left.
+    Select the middle element in the interval. In case of a tie, choose the left one.
     """
     return (left_incl + right_incl) // 2
+
+
+def choose_straight_middle_right(left_incl, right_incl):
+    """
+    Select the middle element in the interval. In case of a tie, choose the right one.
+    """
+    return (left_incl + right_incl + 1) // 2
 
 
 def choose_right_leaning(left_incl, right_incl):
@@ -17,6 +24,15 @@ def choose_right_leaning(left_incl, right_incl):
     search_space_size = right_incl - left_incl + 1
     log_size = int(log2(search_space_size))
     return min(left_incl + 2 ** log_size - 1, right_incl)
+
+
+def choose_left_leaning(left_incl, right_incl):
+    """
+    Select the leftmost element in the interval that won't increase the worst-case complexity for the binary search.
+    """
+    search_space_size = right_incl - left_incl + 1
+    log_size = int(log2(search_space_size))
+    return max(left_incl, right_incl - 2 ** log_size + 1)
 
 
 def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list[int]:
@@ -51,28 +67,23 @@ def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list
     return wins  # wins[i] == how many $ you will win if Ballmer chose number i
 
 
-def mirror(wins):
-    """
-    Use the fact that the winning strategy is still winning if you "mirror" it with 50% probability.
-    And if it's a linear combinations of many strategies, this is equivalent to mirroring all these sub-strategies
-    with 50% probability. I.e. we can safely "mirror" all strategies before looking for a combination of them that
-    is winning.
-
-    And if we deal only with the "mirrored" strategies, the solver will discard their symmetrical last halves
-    and have less work to do.
-    """
-    return [(wins[i] + wins[-1 - i]) / 2 for i in range(len(wins))]
-
-
 def prepare_strategies(n):
     named_strategies = {}
     named_strategies.update({
-        f'[also mirror this strategy with 50% probability] Binary search, first guess is {x}. On each step, guess the middle element in the interval, in case of tie guess the left one.':
-            mirror(predict_wins_binsearch(n, x, choose_straight_middle)) for x in range(n)
+        f'Binary search, first guess {x}. On each step, guess the middle element in the interval. In case of tie, guess the left one.':
+            predict_wins_binsearch(n, x, choose_straight_middle_left) for x in range(n)
     })
     named_strategies.update({
-        f'[also mirror this strategy with 50% probability] Binary search, first guess is {x}. On each step, guess the rightmost element in the interval that won\'t increase the worst-case complexity.':
-            mirror(predict_wins_binsearch(n, x, choose_right_leaning)) for x in range(n)
+        f'Binary search, first guess {x}. On each step, guess the middle element in the interval. In case of tie, guess the right one.':
+            predict_wins_binsearch(n, x, choose_straight_middle_right) for x in range(n)
+    })
+    named_strategies.update({
+        f'Binary search, first guess is {x}. On each step, guess the rightmost element in the interval that won\'t increase the worst-case complexity.':
+            predict_wins_binsearch(n, x, choose_right_leaning) for x in range(n)
+    })
+    named_strategies.update({
+        f'Binary search, first guess is {x}. On each step, guess the leftmost element in the interval that won\'t increase the worst-case complexity.':
+            predict_wins_binsearch(n, x, choose_left_leaning) for x in range(n)
     })
 
     strategy_names = {}
@@ -119,14 +130,14 @@ def main(n=100):
     print('## Winning strategy')
     for strategy, coeff in zip(strategies, normalized_coeffs):  # using the fact they are the same
         if coeff:
-            print(f'- With probability {coeff*100:0.4f}%: {strategy_names[tuple(strategy)]}')
+            print(f'- With probability {coeff * 100:0.4f}%: {strategy_names[tuple(strategy)]}')
 
     print('## Average wins for each number')
     for i, win in enumerate(mixed_strategy):
-        print(f'{i}: {win}')
+        print(f'{i}: ${win:0.4f}')
 
-    print(f'Avg win if Ballmer chooses randomly: {sum(mixed_strategy) / len(mixed_strategy)}')
-    print(f'Worst win if Ballmer chooses adversarially: {min(mixed_strategy)}')
+    print(f'Avg win if Ballmer chooses randomly: ${sum(mixed_strategy) / len(mixed_strategy)}')
+    print(f'Worst win if Ballmer chooses adversarially: ${min(mixed_strategy)}')
 
 
 if __name__ == '__main__':
