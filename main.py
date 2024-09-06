@@ -1,23 +1,24 @@
 from math import log2
+from sys import argv
 
 from scipy.optimize import linprog
 
 
-def choose_straight_middle_left(left_incl, right_incl):
+def choose_straight_middle_left(left_incl, right_incl, n):
     """
     Select the middle element in the interval. In case of a tie, choose the left one.
     """
     return (left_incl + right_incl) // 2
 
 
-def choose_straight_middle_right(left_incl, right_incl):
+def choose_straight_middle_right(left_incl, right_incl, n):
     """
     Select the middle element in the interval. In case of a tie, choose the right one.
     """
     return (left_incl + right_incl + 1) // 2
 
 
-def choose_right_leaning(left_incl, right_incl):
+def choose_right_leaning(left_incl, right_incl, n):
     """
     Select the rightmost element in the interval that won't increase the worst-case complexity for the binary search.
     """
@@ -26,13 +27,20 @@ def choose_right_leaning(left_incl, right_incl):
     return min(left_incl + 2 ** log_size - 1, right_incl)
 
 
-def choose_left_leaning(left_incl, right_incl):
+def choose_left_leaning(left_incl, right_incl, n):
     """
     Select the leftmost element in the interval that won't increase the worst-case complexity for the binary search.
     """
     search_space_size = right_incl - left_incl + 1
     log_size = int(log2(search_space_size))
     return max(left_incl, right_incl - 2 ** log_size + 1)
+
+
+def choose_outward_leaning(left_incl, right_incl, n):
+    if left_incl > (n - right_incl):
+        return choose_right_leaning(left_incl, right_incl, n)
+    else:
+        return choose_left_leaning(left_incl, right_incl, n)
 
 
 def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list[int]:
@@ -47,7 +55,7 @@ def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list
     def fill_attempts(left_incl, right_incl, cur_attempt):
         if left_incl > right_incl:
             return
-        middle = choose_middle_func(left_incl, right_incl)
+        middle = choose_middle_func(left_incl, right_incl, n)
         attempts[middle] = cur_attempt
         if left_incl == right_incl:
             return
@@ -57,6 +65,29 @@ def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list
     attempts[first_guess] = 1
     fill_attempts(0, first_guess - 1, cur_attempt=2)
     fill_attempts(first_guess + 1, n - 1, cur_attempt=2)
+
+    assert all(attempts)  # all items must be guessable with 1 or more attempts
+
+    wins = [
+        6 - a  # $5 for guessing on the 1st` attempts, $4 for the 2nd, etc
+        for a in attempts
+    ]
+    return wins  # wins[i] == how many $ you will win if Ballmer chose number i
+
+
+def predict_wins_linearsearch(n: int, first_guess: int) -> list[int]:
+    """
+    :param n: how many elements do we chose from
+    :param first_guess: what is the first guess
+    :returns array - how many $ you will win if Ballmer chose number i
+    """
+    attempts = [0] * n  # attempts[i] == how many attempts to guess the number i with this strategy
+
+    attempts[first_guess] = 1
+    for i in range(first_guess):
+        attempts[i] = i+2
+    for i in range(n - first_guess - 1):
+        attempts[n - i - 1] = i+2
 
     assert all(attempts)  # all items must be guessable with 1 or more attempts
 
@@ -84,6 +115,14 @@ def prepare_strategies(n):
     named_strategies.update({
         f'Binary search, first guess is {x}. On each step, guess the leftmost element in the interval that won\'t increase the worst-case complexity.':
             predict_wins_binsearch(n, x, choose_left_leaning) for x in range(n)
+    })
+    named_strategies.update({
+        f'Binary search, first guess is {x}. On each step, guess the endmost element in the interval that won\'t increase the worst-case complexity.':
+            predict_wins_binsearch(n, x, choose_outward_leaning) for x in range(n)
+    })
+    named_strategies.update({
+        f'Linear search, first guess is {x}, then walk linearly inward from the endpoint.':
+            predict_wins_linearsearch(n, x) for x in range(n)
     })
 
     strategy_names = {}
@@ -148,4 +187,4 @@ def main(n=100):
 
 
 if __name__ == '__main__':
-    main()
+    main(int(argv[1]))
