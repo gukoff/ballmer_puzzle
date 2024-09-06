@@ -123,7 +123,14 @@ def main(n=100):
     normalized_coeffs = res.x / sum(res.x)
 
     mixed_strategy = [
-        float(sum(normalized_coeffs[idx] * os[win_idx] for idx, os in enumerate(strategies)))
+        float(sum(normalized_coeffs[idx] * s[win_idx] for idx, s in enumerate(strategies)))
+        for win_idx in range(len(strategies[0]))
+    ]
+
+    mixed_strategy_stdev = [
+        float(
+            sum(normalized_coeffs[idx] * (s[win_idx] - mixed_strategy[win_idx]) ** 2 for idx, s in enumerate(strategies))
+        ) ** 0.5
         for win_idx in range(len(strategies[0]))
     ]
 
@@ -133,11 +140,11 @@ def main(n=100):
             print(f'- With probability {coeff * 100:0.4f}%: {strategy_names[tuple(strategy)]}')
 
     print('## Average wins for each number')
-    for i, win in enumerate(mixed_strategy):
-        print(f'{i}: ${win:0.4f}')
+    for i, (mean_win, stdev_win) in enumerate(zip(mixed_strategy, mixed_strategy_stdev)):
+        print(f'{i}: ${mean_win:0.4f} (stdev ${stdev_win**0.5:0.4f})')
 
     print(f'Avg win if Ballmer chooses randomly: ${sum(mixed_strategy) / len(mixed_strategy)}')
-    print(f'Worst win if Ballmer chooses adversarially: ${min(mixed_strategy)}')
+    print(f'Win if Ballmer chooses adversarially: ${min(mixed_strategy)}')
 
 
 if __name__ == '__main__':
