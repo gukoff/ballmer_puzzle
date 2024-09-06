@@ -1,24 +1,16 @@
+import random
 from math import log2
 from sys import argv
 
 from scipy.optimize import linprog
 
-
-def choose_straight_middle_left(left_incl, right_incl, n):
-    """
-    Select the middle element in the interval. In case of a tie, choose the left one.
-    """
+def binsearch_straight_left(left_incl, right_incl):
     return (left_incl + right_incl) // 2
 
-
-def choose_straight_middle_right(left_incl, right_incl, n):
-    """
-    Select the middle element in the interval. In case of a tie, choose the right one.
-    """
+def binsearch_straight_right(left_incl, right_incl):
     return (left_incl + right_incl + 1) // 2
 
-
-def choose_right_leaning(left_incl, right_incl, n):
+def binsearch_right_leaning(left_incl, right_incl):
     """
     Select the rightmost element in the interval that won't increase the worst-case complexity for the binary search.
     """
@@ -26,8 +18,7 @@ def choose_right_leaning(left_incl, right_incl, n):
     log_size = int(log2(search_space_size))
     return min(left_incl + 2 ** log_size - 1, right_incl)
 
-
-def choose_left_leaning(left_incl, right_incl, n):
+def binsearch_left_leaning(left_incl, right_incl):
     """
     Select the leftmost element in the interval that won't increase the worst-case complexity for the binary search.
     """
@@ -35,59 +26,66 @@ def choose_left_leaning(left_incl, right_incl, n):
     log_size = int(log2(search_space_size))
     return max(left_incl, right_incl - 2 ** log_size + 1)
 
+def binsearch_outward_leaning(n):
+    def f(left_incl, right_incl):
+        if left_incl > (n - right_incl):
+            return binsearch_right_leaning(left_incl, right_incl)
+        else:
+            return binsearch_left_leaning(left_incl, right_incl)
+    return f
 
-def choose_outward_leaning(left_incl, right_incl, n):
-    if left_incl > (n - right_incl):
-        return choose_right_leaning(left_incl, right_incl, n)
-    else:
-        return choose_left_leaning(left_incl, right_incl, n)
+def list_then_binsearch(guesses, binsearch):
+    def f(left_incl, right_incl):
+        for i in guesses:
+            if left_incl <= i <= right_incl:
+                return i
+        return binsearch(left_incl, right_incl)
+    return f
 
+def list_then_inward(guesses, n):
+    def f(left_incl, right_incl):
+        leftbound = 0
+        rightbound = n-1
+        for i in guesses:
+            if left_incl <= i <= right_incl:
+                return i
+            elif leftbound <= i <= rightbound:
+                if left_incl < i:
+                    last_hop_leftward = True
+                    leftbound = max(i, leftbound)
+                else:
+                    last_hop_leftward = False
+                    rightbound = min(i, rightbound)
+        # Otherwise we're doing the linear-search part. Are we traversing leftward or rightward?
+        # If our last binary-search hop was leftward, then we should traverse rightward,
+        # and vice versa.
+        if last_hop_leftward:
+            return left_incl
+        else:
+            return right_incl
+    return f
 
-def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list[int]:
+def predict_wins(n: int, guesser) -> list[int]:
     """
     :param n: how many elements do we chose from
-    :param first_guess: what is the first guess
-    :param choose_middle_func: how the binary search should select its next guess
+    :param guesser: function(lo, hi) -> int: what is your next guess
     :returns array - how many $ you will win if Ballmer chose number i
     """
-    attempts = [0] * n  # attempts[i] == how many attempts to guess the number i with this strategy
-
-    def fill_attempts(left_incl, right_incl, cur_attempt):
-        if left_incl > right_incl:
-            return
-        middle = choose_middle_func(left_incl, right_incl, n)
-        attempts[middle] = cur_attempt
-        if left_incl == right_incl:
-            return
-        fill_attempts(left_incl, middle - 1, cur_attempt + 1)
-        fill_attempts(middle + 1, right_incl, cur_attempt + 1)
-
-    attempts[first_guess] = 1
-    fill_attempts(0, first_guess - 1, cur_attempt=2)
-    fill_attempts(first_guess + 1, n - 1, cur_attempt=2)
-
-    assert all(attempts)  # all items must be guessable with 1 or more attempts
-
-    wins = [
-        6 - a  # $5 for guessing on the 1st` attempts, $4 for the 2nd, etc
-        for a in attempts
-    ]
-    return wins  # wins[i] == how many $ you will win if Ballmer chose number i
-
-
-def predict_wins_linearsearch(n: int, first_guess: int) -> list[int]:
-    """
-    :param n: how many elements do we chose from
-    :param first_guess: what is the first guess
-    :returns array - how many $ you will win if Ballmer chose number i
-    """
-    attempts = [0] * n  # attempts[i] == how many attempts to guess the number i with this strategy
-
-    attempts[first_guess] = 1
-    for i in range(first_guess):
-        attempts[i] = i+2
-    for i in range(n - first_guess - 1):
-        attempts[n - i - 1] = i+2
+    attempts = [0] * n
+    for ballmer in range(n):
+        left_incl = 0
+        right_incl = n - 1
+        count = 0
+        while True:
+            count += 1
+            guess = guesser(left_incl, right_incl)
+            if guess == ballmer:
+                break
+            elif guess < ballmer:
+                left_incl = guess + 1
+            else:
+                right_incl = guess - 1
+        attempts[ballmer] = count
 
     assert all(attempts)  # all items must be guessable with 1 or more attempts
 
@@ -100,38 +98,33 @@ def predict_wins_linearsearch(n: int, first_guess: int) -> list[int]:
 
 def prepare_strategies(n):
     named_strategies = {}
+
     named_strategies.update({
         f'Binary search, first guess {x}. On each step, guess the middle element in the interval. In case of tie, guess the left one.':
-            predict_wins_binsearch(n, x, choose_straight_middle_left) for x in range(n)
+            predict_wins(n, list_then_binsearch([x], binsearch_straight_left)) for x in range(n)
     })
     named_strategies.update({
         f'Binary search, first guess {x}. On each step, guess the middle element in the interval. In case of tie, guess the right one.':
-            predict_wins_binsearch(n, x, choose_straight_middle_right) for x in range(n)
+            predict_wins(n, list_then_binsearch([x], binsearch_straight_right)) for x in range(n)
     })
     named_strategies.update({
         f'Binary search, first guess is {x}. On each step, guess the rightmost element in the interval that won\'t increase the worst-case complexity.':
-            predict_wins_binsearch(n, x, choose_right_leaning) for x in range(n)
+            predict_wins(n, list_then_binsearch([x], binsearch_right_leaning)) for x in range(n)
     })
     named_strategies.update({
         f'Binary search, first guess is {x}. On each step, guess the leftmost element in the interval that won\'t increase the worst-case complexity.':
-            predict_wins_binsearch(n, x, choose_left_leaning) for x in range(n)
+            predict_wins(n, list_then_binsearch([x], binsearch_left_leaning)) for x in range(n)
     })
     named_strategies.update({
         f'Binary search, first guess is {x}. On each step, guess the endmost element in the interval that won\'t increase the worst-case complexity.':
-            predict_wins_binsearch(n, x, choose_outward_leaning) for x in range(n)
+            predict_wins(n, list_then_binsearch([x], binsearch_outward_leaning(n))) for x in range(n)
     })
     named_strategies.update({
         f'Linear search, first guess is {x}, then walk linearly inward from the endpoint.':
-            predict_wins_linearsearch(n, x) for x in range(n)
+            predict_wins(n, list_then_inward([x], n)) for x in range(n)
     })
 
-    strategy_names = {}
-    strategies = []
-    for name, wins in named_strategies.items():
-        strategy_names[tuple(wins)] = name
-        strategies.append(wins)
-
-    return strategies, strategy_names
+    return named_strategies
 
 
 def solve(strategies: list[list[float]]):
@@ -153,38 +146,91 @@ def solve(strategies: list[list[float]]):
 
 
 def main(n=100):
-    strategies, strategy_names = prepare_strategies(n)
+    named_strategies = {}
+    def add_named_strategy(name, guesser):
+        named_strategies.update({ name: predict_wins(n, guesser) })
 
-    res = solve(strategies)
+    for i in range(n):
+        guesses = [i]
+        add_named_strategy(
+            f'Guess %r, then left-leaning binary search.' % guesses,
+            list_then_binsearch(guesses, binsearch_left_leaning)
+        )
+        add_named_strategy(
+            f'Guess %r, then right-leaning binary search.' % guesses,
+            list_then_binsearch(guesses, binsearch_right_leaning)
+        )
+        add_named_strategy(
+            f'Guess %r, then left-straight binary search.' % guesses,
+            list_then_binsearch(guesses, binsearch_straight_left)
+        )
+        add_named_strategy(
+            f'Guess %r, then right-straight binary search.' % guesses,
+            list_then_binsearch(guesses, binsearch_straight_right)
+        )
 
-    assert res.x is not None, "could not solve"
+    while True:
+        strategy_names = {}
+        strategies = []
+        for name, wins in named_strategies.items():
+            strategy_names[tuple(wins)] = name
+            strategies.append(wins)
 
-    normalized_coeffs = res.x / sum(res.x)
+        print('Solving with %d strategies...' % (len(strategies),))
+        res = solve(strategies)
+        assert res.x is not None, "could not solve"
 
-    mixed_strategy = [
-        float(sum(normalized_coeffs[idx] * s[win_idx] for idx, s in enumerate(strategies)))
-        for win_idx in range(len(strategies[0]))
-    ]
+        normalized_coeffs = res.x / sum(res.x)
 
-    mixed_strategy_stdev = [
-        float(
-            sum(normalized_coeffs[idx] * (s[win_idx] - mixed_strategy[win_idx]) ** 2 for idx, s in enumerate(strategies))
-        ) ** 0.5
-        for win_idx in range(len(strategies[0]))
-    ]
+        mixed_strategy = [
+            float(sum(normalized_coeffs[idx] * s[win_idx] for idx, s in enumerate(strategies)))
+            for win_idx in range(len(strategies[0]))
+        ]
 
-    print('## Winning strategy')
-    for strategy, coeff in zip(strategies, normalized_coeffs):  # using the fact they are the same
-        if coeff:
-            print(f'- With probability {coeff * 100:0.4f}%: {strategy_names[tuple(strategy)]}')
+        mixed_strategy_stdev = [
+            float(
+                sum(normalized_coeffs[idx] * (s[win_idx] - mixed_strategy[win_idx]) ** 2 for idx, s in enumerate(strategies))
+            ) ** 0.5
+            for win_idx in range(len(strategies[0]))
+        ]
 
-    print('## Average wins for each number')
-    for i, (mean_win, stdev_win) in enumerate(zip(mixed_strategy, mixed_strategy_stdev)):
-        print(f'{i}: ${mean_win:0.4f} (stdev ${stdev_win**0.5:0.4f})')
+        print('## Winning strategy')
+        for strategy, coeff in zip(strategies, normalized_coeffs):  # using the fact they are the same
+            if coeff:
+                print(f'- With probability {coeff * 100:0.4f}%: {strategy_names[tuple(strategy)]}')
 
-    print(f'Avg win if Ballmer chooses randomly: ${sum(mixed_strategy) / len(mixed_strategy)}')
-    print(f'Win if Ballmer chooses adversarially: ${min(mixed_strategy)}')
+        print('## Average wins for each number')
+        for i, (mean_win, stdev_win) in enumerate(zip(mixed_strategy, mixed_strategy_stdev)):
+            print(f'{i}: ${mean_win:0.4f} (stdev ${stdev_win**0.5:0.4f})')
 
+        print(f'Avg win if Ballmer chooses randomly: ${sum(mixed_strategy) / len(mixed_strategy)}')
+        print(f'Win if Ballmer chooses adversarially: ${min(mixed_strategy)}')
+
+        if max(mixed_strategy) < min(mixed_strategy) + 0.00001:
+            print('YOU CAN STOP NOW')
+
+        input()
+
+        best_guesses = [i for _,i in sorted([(mixed_strategy[i], i) for i in range(n)])][:10]
+        for i in range(10):
+            random.shuffle(best_guesses)
+            guesses = best_guesses[:5]
+            add_named_strategy(
+                f'Guess %r, then outward-leaning binary search.' % guesses,
+                list_then_binsearch(guesses, binsearch_outward_leaning(n))
+            )
+            add_named_strategy(
+                f'Guess %r, then left-leaning binary search.' % guesses,
+                list_then_binsearch(guesses, binsearch_left_leaning)
+            )
+            add_named_strategy(
+                f'Guess %r, then right-leaning binary search.' % guesses,
+                list_then_binsearch(guesses, binsearch_right_leaning)
+            )
+            add_named_strategy(
+                f'Guess %r, then linear search inward.' % guesses,
+                list_then_inward(guesses, n)
+            )
 
 if __name__ == '__main__':
     main(int(argv[1]))
