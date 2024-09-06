@@ -1,5 +1,5 @@
+import argparse
 from math import log2
-from sys import argv
 
 from scipy.optimize import linprog
 
@@ -187,4 +187,7 @@ def main(n=100):
 
 
 if __name__ == '__main__':
-    main(int(argv[1]))
+    parser = argparse.ArgumentParser(description="Generate winning strategy for the puzzle of n numbers.")
+    parser.add_argument('n', type=int, nargs='?', default=100)
+    args = parser.parse_args()
+    main(args.n)
