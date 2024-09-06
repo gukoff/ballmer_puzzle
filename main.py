@@ -43,13 +43,6 @@ def choose_outward_leaning(left_incl, right_incl, n):
         return choose_left_leaning(left_incl, right_incl, n)
 
 
-def choose_outward_linear(left_incl, right_incl, n):
-    if left_incl > (n - right_incl):
-        return right_incl
-    else:
-        return left_incl
-
-
 def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list[int]:
     """
     :param n: how many elements do we chose from
@@ -72,6 +65,29 @@ def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list
     attempts[first_guess] = 1
     fill_attempts(0, first_guess - 1, cur_attempt=2)
     fill_attempts(first_guess + 1, n - 1, cur_attempt=2)
+
+    assert all(attempts)  # all items must be guessable with 1 or more attempts
+
+    wins = [
+        6 - a  # $5 for guessing on the 1st` attempts, $4 for the 2nd, etc
+        for a in attempts
+    ]
+    return wins  # wins[i] == how many $ you will win if Ballmer chose number i
+
+
+def predict_wins_linearsearch(n: int, first_guess: int) -> list[int]:
+    """
+    :param n: how many elements do we chose from
+    :param first_guess: what is the first guess
+    :returns array - how many $ you will win if Ballmer chose number i
+    """
+    attempts = [0] * n  # attempts[i] == how many attempts to guess the number i with this strategy
+
+    attempts[first_guess] = 1
+    for i in range(first_guess):
+        attempts[i] = i+2
+    for i in range(n - first_guess - 1):
+        attempts[n - i - 1] = i+2
 
     assert all(attempts)  # all items must be guessable with 1 or more attempts
 
@@ -106,7 +122,7 @@ def prepare_strategies(n):
     })
     named_strategies.update({
         f'Linear search, first guess is {x}, then walk linearly inward from the endpoint.':
-            predict_wins_binsearch(n, x, choose_outward_linear) for x in range(n)
+            predict_wins_linearsearch(n, x) for x in range(n)
     })
 
     strategy_names = {}
