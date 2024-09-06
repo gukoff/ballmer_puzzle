@@ -43,6 +43,13 @@ def choose_outward_leaning(left_incl, right_incl, n):
         return choose_left_leaning(left_incl, right_incl, n)
 
 
+def choose_outward_linear(left_incl, right_incl, n):
+    if left_incl > (n - right_incl):
+        return right_incl
+    else:
+        return left_incl
+
+
 def predict_wins_binsearch(n: int, first_guess: int, choose_middle_func) -> list[int]:
     """
     :param n: how many elements do we chose from
@@ -96,6 +103,10 @@ def prepare_strategies(n):
     named_strategies.update({
         f'Binary search, first guess is {x}. On each step, guess the endmost element in the interval that won\'t increase the worst-case complexity.':
             predict_wins_binsearch(n, x, choose_outward_leaning) for x in range(n)
+    })
+    named_strategies.update({
+        f'Linear search, first guess is {x}, then walk linearly inward from the endpoint.':
+            predict_wins_binsearch(n, x, choose_outward_linear) for x in range(n)
     })
 
     strategy_names = {}
